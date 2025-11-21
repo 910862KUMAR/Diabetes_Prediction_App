@@ -1,7 +1,6 @@
-streamlit
-joblib
-scikit-learn
-xgboost
-numpy
-pandas
+streamlit==1.51.0
+joblib==1.5.2
+numpy==2.3.5
+scikit-learn==1.7.2
 openai>=1.37.0
+pandas
