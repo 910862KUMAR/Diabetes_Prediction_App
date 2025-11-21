@@ -5,3 +5,8 @@ scikit-learn==1.7.2
 pandas==2.3.3
 openai>=2.0.0
 xgboost==2.1.1
+gTTS==2.4.0
+matplotlib
+shap
+fpdf
+Pillow
