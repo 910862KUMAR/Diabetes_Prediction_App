@@ -13,7 +13,7 @@ st.write("This app predicts diabetes risk and provides diet plans, doctor recomm
 model = joblib.load('diabetes_model.pkl')
 scaler = joblib.load('scaler.pkl')
 
-# ---------------- OPENAI CLIENT (from environment) ---------------- #
+# ---------------- OPENAI CLIENT ---------------- #
 api_key = os.getenv("OPENAI_API_KEY")
 
 if not api_key:
@@ -64,7 +64,6 @@ if st.button("🔍 Predict Diabetes Risk"):
 st.markdown("---")
 st.header("🤖 AI Health Assistant (Diet, Exercise, Doctor Advice)")
 
-# Chat instructions (system prompt)
 system_prompt = """
 You are a diabetes health assistant. Your tasks:
 1. Provide diabetes awareness and basic guidance.
@@ -73,44 +72,41 @@ You are a diabetes health assistant. Your tasks:
    - Exercise routine
    - Lifestyle changes
 3. Based on symptoms or risk, recommend the correct doctor type:
-   - Endocrinologist (diabetes specialist)
+   - Endocrinologist
    - Dietitian
-   - Cardiologist (heart issues)
-   - Nephrologist (kidney issues)
-   - Ophthalmologist (eye problems)
-4. Be friendly and simple. No medical diagnosis. Education only.
-5. If user gives prediction probability, explain it clearly.
+   - Cardiologist
+   - Nephrologist
+   - Ophthalmologist
+4. Be friendly and simple. No medical diagnosis.
 """
 
-# Chat history
+# Chat memory
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {"role": "system", "content": system_prompt}
     ]
 
-# Show chat history
+# Show old messages
 for msg in st.session_state.messages[1:]:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
 
 # User input
-user_msg = st.chat_input("Ask me for diet plan, exercise, doctor recommendation or diabetes doubts...")
+user_msg = st.chat_input("Ask anything... diet, exercise, doctor advice, diabetes doubts...")
 
 if user_msg:
-    # Add user message
     st.session_state.messages.append({"role": "user", "content": user_msg})
 
-    # Generate AI response
+    # Generate response
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=st.session_state.messages
     )
 
-    bot_msg = response.choices[0].message["content"]
+    # FIXED LINE HERE ✔️
+    bot_msg = response.choices[0].message.content
 
-    # Add assistant response
     st.session_state.messages.append({"role": "assistant", "content": bot_msg})
 
-    # Display response
     with st.chat_message("assistant"):
         st.write(bot_msg)
