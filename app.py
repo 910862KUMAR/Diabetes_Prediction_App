@@ -1,6 +1,7 @@
 # ============================================================
 # ADVANCED DIABETES AI ASSISTANT
-# Developed by: Kumar GK (Student Project)
+# Designed & Developed by Kumar GK
+# Student Academic Project
 # ============================================================
 
 import streamlit as st
@@ -29,13 +30,40 @@ h1,h2,h3 { color:#7dd3fc; }
 </style>
 """, unsafe_allow_html=True)
 
+# ---------------- LANGUAGE SELECT ----------------
+language = st.selectbox(
+    "🌐 Language / ಭಾಷೆ / भाषा",
+    ["English", "Kannada", "Hindi"]
+)
+
+CAPTIONS = {
+    "English": {
+        "title": "Advanced Diabetes AI Assistant",
+        "subtitle": "Designed & Developed by Kumar GK",
+        "tagline": "Student Academic Project — Intelligent Healthcare Assistant",
+        "footer": "This application is developed only for educational purposes and does not replace medical advice."
+    },
+    "Kannada": {
+        "title": "ಅಡ್ವಾನ್ಸ್ ಡಯಾಬಿಟಿಸ್ ಎಐ ಸಹಾಯಕ",
+        "subtitle": "ವಿನ್ಯಾಸಗೊಳಿಸಿ ಅಭಿವೃದ್ಧಿಪಡಿಸಿದವರು: ಕುಮಾರ್ ಜಿಕೆ",
+        "tagline": "ವಿದ್ಯಾರ್ಥಿ ಶೈಕ್ಷಣಿಕ ಪ್ರಾಜೆಕ್ಟ್ — ಬುದ್ಧಿವಂತ ಆರೋಗ್ಯ ಸಹಾಯಕ",
+        "footer": "ಈ ಅಪ್ಲಿಕೇಶನ್ ಶೈಕ್ಷಣಿಕ ಉದ್ದೇಶಗಳಿಗೆ ಮಾತ್ರ ಮತ್ತು ವೈದ್ಯಕೀಯ ಸಲಹೆಗೆ ಪರ್ಯಾಯವಲ್ಲ."
+    },
+    "Hindi": {
+        "title": "एडवांस्ड डायबिटीज एआई असिस्टेंट",
+        "subtitle": "विकसितकर्ता: कुमार जीके",
+        "tagline": "छात्र शैक्षणिक परियोजना — स्मार्ट हेल्थकेयर सहायक",
+        "footer": "यह एप्लिकेशन केवल शैक्षणिक उद्देश्य के लिए है और चिकित्सकीय सलाह का विकल्प नहीं है।"
+    }
+}
+
 # ---------------- HEADER ----------------
-st.markdown("""
+st.markdown(f"""
 <div class="card">
-<h1>🩺 Advanced Diabetes AI Assistant</h1>
+<h1>{CAPTIONS[language]['title']}</h1>
 <p>
-Built by <b>Kumar GK</b> | Student Project <br>
-An educational AI system for diabetes awareness & learning
+<b>{CAPTIONS[language]['subtitle']}</b><br>
+{CAPTIONS[language]['tagline']}
 </p>
 </div>
 """, unsafe_allow_html=True)
@@ -51,47 +79,35 @@ if not os.getenv("OPENAI_API_KEY"):
 
 client = OpenAI()
 
-# ---------------- SYSTEM PROMPT ----------------
-SYSTEM_PROMPT = """
-You are an AI healthcare assistant for diabetes education.
-This is a STUDENT PROJECT for learning purposes.
+# ---------------- SYSTEM PROMPT (LANGUAGE AWARE) ----------------
+SYSTEM_PROMPT = f"""
+You are a calm, professional healthcare AI assistant for diabetes education.
+This is a STUDENT ACADEMIC PROJECT.
 
-Rules:
+IMPORTANT:
+- Reply ONLY in {language}
+- Keep answers simple, structured, and calm (Alexa-style)
 - No medicine dosage
-- No diagnosis confirmation
+- No final diagnosis
 - Always suggest consulting doctors
-- Adjust advice for kids, adults, elderly
+- Adjust advice for kids (Type 1), adults (Type 2), and elderly
+
+End every reply with a short safety note.
 """
 
 # ---------------- DATABASE ----------------
 HOSPITAL_DB = {
     "Bangalore": {
-        "government": {
-            "diabetes": ["Victoria Hospital – KR Market"],
-            "heart": ["Jayadeva Hospital – Bannerghatta Road"],
-            "kidney": ["Victoria Hospital – Nephrology"],
-            "eye": ["Minto Eye Hospital – Chamrajpet"]
-        },
-        "private": {
-            "diabetes": ["Apollo Hospital – Bannerghatta Road"],
-            "heart": ["Narayana Health – Bommasandra"],
-            "kidney": ["Manipal Hospital – Old Airport Road"],
-            "eye": ["Narayana Nethralaya – Rajajinagar"]
-        }
+        "diabetes": ["Victoria Hospital – KR Market", "Apollo Hospital – Bannerghatta Road"],
+        "heart": ["Jayadeva Hospital – Bannerghatta Road"],
+        "kidney": ["Victoria Hospital – Nephrology"],
+        "eye": ["Minto Eye Hospital – Chamrajpet"]
     },
     "Delhi": {
-        "government": {
-            "diabetes": ["AIIMS – Ansari Nagar"],
-            "heart": ["AIIMS Cardiology"],
-            "kidney": ["Safdarjung Hospital"],
-            "eye": ["Dr RP Centre – AIIMS"]
-        },
-        "private": {
-            "diabetes": ["Max Hospital – Saket"],
-            "heart": ["Fortis Escorts – Okhla"],
-            "kidney": ["BLK Hospital"],
-            "eye": ["Centre for Sight – Dwarka"]
-        }
+        "diabetes": ["AIIMS – Ansari Nagar", "Max Hospital – Saket"],
+        "heart": ["AIIMS Cardiology"],
+        "kidney": ["Safdarjung Hospital"],
+        "eye": ["Dr RP Centre – AIIMS"]
     }
 }
 
@@ -105,14 +121,6 @@ MEDICINES = [
     "Vitamin B12"
 ]
 
-SYMPTOM_MAP = {
-    "frequent urination": "Diabetes",
-    "burning feet": "Diabetic Neuropathy",
-    "blurred vision": "Diabetic Retinopathy",
-    "chest pain": "Heart Disease",
-    "leg swelling": "Kidney Disease"
-}
-
 # ---------------- HELPERS ----------------
 def extract_city(text):
     for c in HOSPITAL_DB.keys():
@@ -121,29 +129,25 @@ def extract_city(text):
     return None
 
 def detect_organ(text):
-    if "heart" in text:
-        return "heart"
-    if "kidney" in text:
-        return "kidney"
-    if "eye" in text or "vision" in text:
-        return "eye"
+    if "heart" in text: return "heart"
+    if "kidney" in text: return "kidney"
+    if "eye" in text or "vision" in text: return "eye"
     return "diabetes"
 
-def detect_type(text):
-    if "government" in text or "govt" in text:
-        return "government"
-    if "private" in text:
-        return "private"
-    return None
-
-def bmi_age_advice(bmi, age):
+def age_based_note(age):
     if age < 18:
-        return "\n🧒 Child case: Likely Type 1 diabetes. Pediatric endocrinologist required."
+        return {
+            "English": "🧒 This appears to be a child case. Type 1 diabetes is common. Pediatric endocrinologist consultation is important.",
+            "Kannada": "🧒 ಇದು ಮಕ್ಕಳ ಪ್ರಕರಣವಾಗಿರಬಹುದು. ಟೈಪ್ 1 ಡಯಾಬಿಟಿಸ್ ಸಾಮಾನ್ಯ. ಮಕ್ಕಳ ಎಂಡೋಕ್ರೈನಾಲಜಿಸ್ಟ್ ಸಲಹೆ ಅಗತ್ಯ.",
+            "Hindi": "🧒 यह बच्चों का मामला हो सकता है। टाइप 1 डायबिटीज सामान्य है। बाल रोग विशेषज्ञ से परामर्श जरूरी है।"
+        }[language]
     if age >= 60:
-        return "\n👴 Elderly care: Prefer multi-speciality hospital, heart & kidney monitoring."
-    if bmi >= 30:
-        return "\n⚠️ Obesity risk: Lifestyle clinic + cardiology support advised."
-    return "\n✅ General hospital with endocrinology OPD is sufficient."
+        return {
+            "English": "👴 Elderly care: heart, kidney, and BP monitoring is important.",
+            "Kannada": "👴 ಹಿರಿಯರ ಆರೈಕೆ: ಹೃದಯ, ಕಿಡ್ನಿ ಮತ್ತು ರಕ್ತದೊತ್ತಡ ಮೇಲ್ವಿಚಾರಣೆ ಅಗತ್ಯ.",
+            "Hindi": "👴 बुजुर्गों में हृदय, किडनी और बीपी की निगरानी जरूरी है।"
+        }[language]
+    return ""
 
 # ---------------- PREDICTION ----------------
 st.markdown("<div class='card'>", unsafe_allow_html=True)
@@ -163,7 +167,7 @@ bp = c2.number_input("Blood Pressure", 0, 200, 70)
 skin = c3.number_input("Skin Thickness", 0, 100, 20)
 insulin = c4.number_input("Insulin", 0, 900, 80)
 
-c5,c6,c7 = st.columns(3)
+c5,c6 = st.columns(2)
 bmi = c5.number_input("BMI", 0.0, 60.0, 25.0)
 dpf = c6.number_input("Diabetes Pedigree Function", 0.0, 3.0, 0.5)
 
@@ -193,57 +197,49 @@ st.markdown("<div class='card'>", unsafe_allow_html=True)
 st.subheader("🤖 Health Chatbot")
 
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    st.session_state.messages = [{"role":"system","content":SYSTEM_PROMPT}]
 
 for m in st.session_state.messages:
-    if m["role"] == "user":
+    if m["role"]=="user":
         st.markdown(f"<div class='chat-user'>👤 {m['content']}</div>", unsafe_allow_html=True)
-    elif m["role"] == "assistant":
+    elif m["role"]=="assistant":
         st.markdown(f"<div class='chat-bot'>🤖 {m['content']}</div>", unsafe_allow_html=True)
 
-query = st.text_input("Ask about hospitals, medicines, heart, kidney, eye, kids, gym...")
+query = st.text_input("Ask about diabetes, hospitals, medicines, kids, elderly care...")
 
 if query:
-    st.session_state.messages.append({"role": "user", "content": query})
-    ai = client.chat.completions.create(
+    st.session_state.messages.append({"role":"user","content":query})
+
+    response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=st.session_state.messages
     )
 
-    bot = ai.choices[0].message.content
+    bot = response.choices[0].message.content
     text = query.lower()
 
     if "medicine" in text:
-        bot += "\n\n💊 Common Medicines:\n" + "\n".join([f"- {m}" for m in MEDICINES])
-
-    for s, d in SYMPTOM_MAP.items():
-        if s in text:
-            bot += f"\n🧠 Possible condition: {d}"
+        bot += "\n\n💊 " + ("Common medicines:" if language=="English" else
+                             "ಸಾಮಾನ್ಯ ಔಷಧಿಗಳು:" if language=="Kannada"
+                             else "सामान्य दवाइयाँ:")
+        for m in MEDICINES:
+            bot += f"\n- {m}"
 
     city = extract_city(text)
-    organ = detect_organ(text)
-    htype = detect_type(text)
-
     if city:
-        bot += f"\n\n🏥 Hospitals in {city} ({organ.title()}):\n"
-        if htype:
-            hs = HOSPITAL_DB[city][htype].get(organ, [])
-        else:
-            hs = (
-                HOSPITAL_DB[city]["government"].get(organ, []) +
-                HOSPITAL_DB[city]["private"].get(organ, [])
-            )
-        for h in hs:
-            bot += f"- {h}\n"
+        organ = detect_organ(text)
+        bot += f"\n\n🏥 Hospitals in {city} ({organ.title()}):"
+        for h in HOSPITAL_DB[city][organ]:
+            bot += f"\n- {h}"
 
-    bot += bmi_age_advice(bmi, age)
-    bot += "\n\n⚠️ Project Disclaimer: This is a student project for educational purposes only."
+    bot += "\n\n" + age_based_note(age)
+    bot += "\n\n⚠️ " + CAPTIONS[language]["footer"]
 
-    st.session_state.messages.append({"role": "assistant", "content": bot})
+    st.session_state.messages.append({"role":"assistant","content":bot})
 
 st.markdown("</div>", unsafe_allow_html=True)
 
-# ---------------- HISTORY ----------------
+# ---------------- HISTORY + PDF ----------------
 st.markdown("<div class='card'>", unsafe_allow_html=True)
 st.subheader("🧾 Patient History")
 
@@ -257,10 +253,10 @@ if st.session_state.history:
         pdf.set_font("Arial", size=12)
         pdf.cell(0,10,"Diabetes Prediction History", ln=True)
         for _, row in df.iterrows():
-            pdf.cell(0,8,str(dict(row)), ln=True)
+            pdf.multi_cell(0,8,str(dict(row)))
         pdf.output("history.pdf")
 
-        with open("history.pdf", "rb") as f:
+        with open("history.pdf","rb") as f:
             st.download_button("Download PDF", f, file_name="history.pdf")
 else:
     st.info("No history yet")
@@ -268,10 +264,10 @@ else:
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------- FOOTER ----------------
-st.markdown("""
+st.markdown(f"""
 <div class="footer">
-<b>Developed by Kumar GK</b> <br>
-Student Mini Project | For Academic & Learning Purpose Only <br>
-Not a substitute for professional medical advice
+<b>Developed by Kumar GK</b><br>
+Student Academic Project<br>
+{CAPTIONS[language]['footer']}
 </div>
 """, unsafe_allow_html=True)
