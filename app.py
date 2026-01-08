@@ -1,5 +1,5 @@
 # ============================================================
-# ADVANCED DIABETES AI ASSISTANT
+# ADVANCED DIABETES AI ASSISTANT (LOCKED FINAL VERSION)
 # Developed by Kumar GK
 # Student Academic Project
 # ============================================================
@@ -7,11 +7,12 @@
 import streamlit as st
 import numpy as np
 import joblib
-from gtts import gTTS
+import os
 import tempfile
 import matplotlib.pyplot as plt
 from fpdf import FPDF
-import datetime
+from gtts import gTTS
+from openai import OpenAI
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
@@ -32,6 +33,9 @@ st.markdown("""
 # ---------------- LANGUAGE ----------------
 language = st.selectbox("🌐 Language / ಭಾಷೆ / भाषा", ["English", "Kannada", "Hindi"])
 
+LANG_CODE = {"English": "en", "Kannada": "kn", "Hindi": "hi"}
+
+# ---------------- CAPTIONS ----------------
 CAPTIONS = {
     "English": {
         "title": "Advanced Diabetes AI Assistant",
@@ -64,11 +68,31 @@ st.markdown(f"""
 
 # ---------------- VOICE ----------------
 def speak(text):
-    lang_code = {"English":"en","Kannada":"kn","Hindi":"hi"}[language]
-    tts = gTTS(text=text, lang=lang_code)
+    tts = gTTS(text=text, lang=LANG_CODE[language])
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
     tts.save(tmp.name)
     st.audio(tmp.name)
+
+# ---------------- OPENAI CLIENT ----------------
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+def ai_fallback(question):
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are a health assistant. "
+                    "Answer clearly and safely. "
+                    "Do not give medical diagnosis or dosage. "
+                    "Always mention this is for educational purposes only."
+                )
+            },
+            {"role": "user", "content": question}
+        ]
+    )
+    return response.choices[0].message.content
 
 # ---------------- HISTORY ----------------
 if "history" not in st.session_state:
@@ -85,72 +109,82 @@ model, scaler = load_model()
 st.markdown("<div class='card'>", unsafe_allow_html=True)
 st.subheader("🧪 Diabetes Risk Prediction")
 
-c1, c2 = st.columns(2)
-with c1:
-    gender = st.selectbox("Gender", ["Male","Female"])
-    age = st.number_input("Age", 1, 120, 35)
-    pregnancies = st.number_input("Pregnancies", 0, 20, 0) if gender=="Female" else 0
-    glucose = st.number_input("Glucose", 0, 300, 120)
-    bp = st.number_input("Blood Pressure", 0, 200, 70)
+age = st.number_input("Age", 1, 120, 35)
 
-with c2:
-    skin = st.number_input("Skin Thickness", 0, 100, 20)
-    insulin = st.number_input("Insulin", 0, 900, 80)
-    bmi = st.number_input("BMI", 0.0, 60.0, 25.0)
-    dpf = st.number_input("Diabetes Pedigree Function", 0.0, 3.0, 0.5)
+gender = st.selectbox("Gender", ["Male", "Female"])
+pregnancies = st.number_input("Pregnancies", 0, 20, 0) if gender == "Female" and age >= 15 else 0
+
+glucose = st.number_input("Glucose Level", 0, 300, 120)
+bp = st.number_input("Blood Pressure", 0, 200, 70)
+skin = st.number_input("Skin Thickness", 0, 100, 20)
+insulin = st.number_input("Insulin", 0, 900, 80)
+bmi = st.number_input("BMI", 0.0, 60.0, 25.0)
+dpf = st.number_input("Diabetes Pedigree Function", 0.0, 3.0, 0.5)
 
 if st.button("🔍 Predict Diabetes"):
     X = np.array([[pregnancies, glucose, bp, skin, insulin, bmi, dpf, age]])
     Xs = scaler.transform(X)
-    pred = model.predict(Xs)[0]
-    prob = model.predict_proba(Xs)[0][1]*100
+    prob = model.predict_proba(Xs)[0][1] * 100
 
-    risk = "High" if prob>70 else "Medium" if prob>40 else "Low"
-
+    risk = "High" if prob > 70 else "Medium" if prob > 40 else "Low"
     st.success(f"Risk Level: {risk} ({prob:.2f}%)")
 
-    # -------- Risk Meter --------
+    if glucose >= 180:
+        st.markdown("<span style='color:red;font-weight:bold'>🔴 High Blood Sugar Detected</span>", unsafe_allow_html=True)
+
     fig, ax = plt.subplots()
     ax.barh(["Risk"], [prob])
-    ax.set_xlim(0,100)
-    ax.set_xlabel("Risk Percentage")
+    ax.set_xlim(0, 100)
     st.pyplot(fig)
 
-    # -------- Save History --------
-    record = f"Prediction → Risk:{risk} ({prob:.2f}%)"
-    st.session_state.history.append(record)
+    st.session_state.history.append(f"Prediction → {risk} ({prob:.2f}%)")
 
-    # -------- PDF --------
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
-    pdf.cell(0,10,"Diabetes Prediction Report",ln=True)
-    pdf.cell(0,8,f"Date: {datetime.datetime.now()}",ln=True)
-    pdf.cell(0,8,f"Risk Level: {risk}",ln=True)
-    pdf.cell(0,8,f"Probability: {prob:.2f}%",ln=True)
-    pdf.multi_cell(0,8,CAPTIONS[language]["disclaimer"])
-    tmp_pdf = tempfile.NamedTemporaryFile(delete=False,suffix=".pdf")
+    pdf.cell(0, 10, "Diabetes Prediction Report", ln=True)
+    pdf.cell(0, 8, f"Risk: {risk}", ln=True)
+    pdf.cell(0, 8, f"Probability: {prob:.2f}%", ln=True)
+    pdf.multi_cell(0, 8, CAPTIONS[language]["disclaimer"])
+
+    tmp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     pdf.output(tmp_pdf.name)
 
-    with open(tmp_pdf.name,"rb") as f:
+    with open(tmp_pdf.name, "rb") as f:
         st.download_button("📄 Download PDF", f.read(), "diabetes_report.pdf")
 
 st.markdown("</div>", unsafe_allow_html=True)
 
-# ---------------- CHATBOT ----------------
+# ---------------- CHATBOT (ANSWER EVERYTHING) ----------------
 st.markdown("<div class='card'>", unsafe_allow_html=True)
-q = st.text_input("💬 Ask about hospital, medicine, food, workout...")
+q = st.text_input("💬 Ask anything about health, diabetes, hospitals, food, workout…")
 
 if q:
     ql = q.lower()
-    if "medicine" in ql:
-        ans = "💊 Common medicines: Metformin, Insulin, Glimepiride"
-    elif "food" in ql:
-        ans = "🥗 Healthy diet: Vegetables, whole grains, avoid sugar"
-    elif "workout" in ql or "gym" in ql:
-        ans = "🏃 Exercise: Walking, yoga, light gym"
+
+    if "food" in ql or "diet" in ql:
+        ans = (
+            "🥗 Diabetic Diet:\n"
+            "Vegetarian: vegetables, ragi, oats, dal\n"
+            "Non-veg: boiled eggs, grilled fish/chicken\n\n"
+            "🔴 If sugar is high: avoid sweets, white rice, junk food."
+        )
+    elif "medicine" in ql:
+        ans = (
+            "💊 Common diabetes medicines:\n"
+            "- Metformin\n- Insulin\n- Glimepiride\n\n"
+            "Consult doctor before use."
+        )
+    elif "gym" in ql or "exercise" in ql:
+        ans = (
+            "🏃 Exercise:\n"
+            "- Walking 30 mins\n"
+            "- Light gym\n"
+            "- Yoga\n"
+            "- Avoid heavy weights"
+        )
     else:
-        ans = "Please ask about hospital, medicine, food, workout."
+        ans = ai_fallback(q)
 
     st.session_state.history.append(q)
     st.markdown(f"<div class='answer'>{ans}</div>", unsafe_allow_html=True)
