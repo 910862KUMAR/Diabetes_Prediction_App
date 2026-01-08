@@ -7,10 +7,11 @@
 import streamlit as st
 import numpy as np
 import joblib
-import os
-import pandas as pd
 from gtts import gTTS
 import tempfile
+import matplotlib.pyplot as plt
+from fpdf import FPDF
+import datetime
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
@@ -28,13 +29,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- LANGUAGE SELECT ----------------
-language = st.selectbox(
-    "🌐 Language / ಭಾಷೆ / भाषा",
-    ["English", "Kannada", "Hindi"]
-)
+# ---------------- LANGUAGE ----------------
+language = st.selectbox("🌐 Language / ಭಾಷೆ / भाषा", ["English", "Kannada", "Hindi"])
 
-# ---------------- CAPTIONS ----------------
 CAPTIONS = {
     "English": {
         "title": "Advanced Diabetes AI Assistant",
@@ -65,131 +62,113 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ---------------- VOICE FUNCTION ----------------
-def speak(text, lang):
-    lang_code = {"English": "en", "Kannada": "kn", "Hindi": "hi"}[lang]
+# ---------------- VOICE ----------------
+def speak(text):
+    lang_code = {"English":"en","Kannada":"kn","Hindi":"hi"}[language]
     tts = gTTS(text=text, lang=lang_code)
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
     tts.save(tmp.name)
     st.audio(tmp.name)
 
-# ---------------- KARNATAKA HOSPITAL DATABASE ----------------
-KARNATAKA_HOSPITALS = {
-    "Tumkur": {
-        "government": {
-            "diabetes": ["District Hospital Tumkur"],
-            "heart": ["District Hospital Tumkur – Cardiology"],
-            "kidney": ["District Hospital Tumkur – Nephrology"],
-            "eye": ["Government Eye Hospital Tumkur"]
-        },
-        "private": {
-            "diabetes": ["Siddaganga Hospital", "Sri Siddhartha Hospital"],
-            "heart": ["Sri Siddhartha Heart Centre"],
-            "kidney": ["Sri Siddhartha Nephrology"],
-            "eye": ["Siddaganga Eye Hospital"]
-        }
-    },
-    "Bangalore": {
-        "government": {
-            "diabetes": ["Victoria Hospital"],
-            "heart": ["Jayadeva Institute of Cardiology"],
-            "kidney": ["Victoria Hospital – Nephrology"],
-            "eye": ["Minto Eye Hospital"]
-        },
-        "private": {
-            "diabetes": ["Apollo Hospital", "Manipal Hospital"],
-            "heart": ["Narayana Health", "Fortis Hospital"],
-            "kidney": ["Manipal Nephrology"],
-            "eye": ["Narayana Nethralaya"]
-        }
-    }
-}
-
-# ---------------- HELPERS ----------------
-def detect_organ(q):
-    q = q.lower()
-    if "heart" in q: return "heart"
-    if "kidney" in q: return "kidney"
-    if "eye" in q: return "eye"
-    return "diabetes"
-
-def detect_type(q):
-    if "government" in q or "govt" in q: return "government"
-    if "private" in q: return "private"
-    return None
-
-# ---------------- STATE ----------------
-if "last_answer" not in st.session_state:
-    st.session_state.last_answer = None
+# ---------------- HISTORY ----------------
 if "history" not in st.session_state:
     st.session_state.history = []
 
-# ---------------- CHAT INPUT ----------------
+# ---------------- LOAD MODEL ----------------
+@st.cache_resource
+def load_model():
+    return joblib.load("diabetes_model.pkl"), joblib.load("scaler.pkl")
+
+model, scaler = load_model()
+
+# ---------------- DIABETES PREDICTION ----------------
 st.markdown("<div class='card'>", unsafe_allow_html=True)
-query = st.text_input("💬 Ask about hospital, medicine, food, workout, gym...")
+st.subheader("🧪 Diabetes Risk Prediction")
 
-if query:
-    q = query.lower()
-    answer = ""
+c1, c2 = st.columns(2)
+with c1:
+    gender = st.selectbox("Gender", ["Male","Female"])
+    age = st.number_input("Age", 1, 120, 35)
+    pregnancies = st.number_input("Pregnancies", 0, 20, 0) if gender=="Female" else 0
+    glucose = st.number_input("Glucose", 0, 300, 120)
+    bp = st.number_input("Blood Pressure", 0, 200, 70)
 
-    # MEDICINE
-    if "medicine" in q:
-        answer = "💊 Common diabetes medicines:\n- Metformin\n- Insulin\n- Glimepiride\n\n" + CAPTIONS[language]["disclaimer"]
+with c2:
+    skin = st.number_input("Skin Thickness", 0, 100, 20)
+    insulin = st.number_input("Insulin", 0, 900, 80)
+    bmi = st.number_input("BMI", 0.0, 60.0, 25.0)
+    dpf = st.number_input("Diabetes Pedigree Function", 0.0, 3.0, 0.5)
 
-    # FOOD
-    elif "food" in q or "diet" in q:
-        answer = "🥗 Healthy diabetic diet:\n- Vegetables\n- Whole grains\n- Avoid sugar\n\n" + CAPTIONS[language]["disclaimer"]
+if st.button("🔍 Predict Diabetes"):
+    X = np.array([[pregnancies, glucose, bp, skin, insulin, bmi, dpf, age]])
+    Xs = scaler.transform(X)
+    pred = model.predict(Xs)[0]
+    prob = model.predict_proba(Xs)[0][1]*100
 
-    # WORKOUT
-    elif "workout" in q or "gym" in q or "exercise" in q:
-        answer = "🏃 Safe exercise:\n- Walking\n- Light gym\n- Yoga\n\n" + CAPTIONS[language]["disclaimer"]
+    risk = "High" if prob>70 else "Medium" if prob>40 else "Low"
 
-    # HOSPITAL
-    elif "hospital" in q:
-        organ = detect_organ(q)
-        htype = detect_type(q)
-        for city in KARNATAKA_HOSPITALS:
-            if city.lower() in q:
-                answer = f"🏥 {organ.title()} hospitals in {city}:\n"
-                if htype:
-                    hs = KARNATAKA_HOSPITALS[city][htype][organ]
-                else:
-                    hs = (
-                        KARNATAKA_HOSPITALS[city]["government"][organ] +
-                        KARNATAKA_HOSPITALS[city]["private"][organ]
-                    )
-                for h in hs:
-                    answer += f"- {h}\n"
-                answer += "\n" + CAPTIONS[language]["disclaimer"]
-                break
-        if not answer:
-            answer = "Please mention a Karnataka city like Tumkur or Bangalore."
+    st.success(f"Risk Level: {risk} ({prob:.2f}%)")
 
-    else:
-        answer = "Please ask about hospital, medicine, food, or workout."
+    # -------- Risk Meter --------
+    fig, ax = plt.subplots()
+    ax.barh(["Risk"], [prob])
+    ax.set_xlim(0,100)
+    ax.set_xlabel("Risk Percentage")
+    st.pyplot(fig)
 
-    st.session_state.last_answer = answer
-    st.session_state.history.append(query)
+    # -------- Save History --------
+    record = f"Prediction → Risk:{risk} ({prob:.2f}%)"
+    st.session_state.history.append(record)
+
+    # -------- PDF --------
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.cell(0,10,"Diabetes Prediction Report",ln=True)
+    pdf.cell(0,8,f"Date: {datetime.datetime.now()}",ln=True)
+    pdf.cell(0,8,f"Risk Level: {risk}",ln=True)
+    pdf.cell(0,8,f"Probability: {prob:.2f}%",ln=True)
+    pdf.multi_cell(0,8,CAPTIONS[language]["disclaimer"])
+    tmp_pdf = tempfile.NamedTemporaryFile(delete=False,suffix=".pdf")
+    pdf.output(tmp_pdf.name)
+
+    with open(tmp_pdf.name,"rb") as f:
+        st.download_button("📄 Download PDF", f.read(), "diabetes_report.pdf")
 
 st.markdown("</div>", unsafe_allow_html=True)
 
-# ---------------- ANSWER DISPLAY ----------------
-if st.session_state.last_answer:
-    st.markdown("<div class='answer'>", unsafe_allow_html=True)
-    st.write(st.session_state.last_answer)
+# ---------------- CHATBOT ----------------
+st.markdown("<div class='card'>", unsafe_allow_html=True)
+q = st.text_input("💬 Ask about hospital, medicine, food, workout...")
+
+if q:
+    ql = q.lower()
+    if "medicine" in ql:
+        ans = "💊 Common medicines: Metformin, Insulin, Glimepiride"
+    elif "food" in ql:
+        ans = "🥗 Healthy diet: Vegetables, whole grains, avoid sugar"
+    elif "workout" in ql or "gym" in ql:
+        ans = "🏃 Exercise: Walking, yoga, light gym"
+    else:
+        ans = "Please ask about hospital, medicine, food, workout."
+
+    st.session_state.history.append(q)
+    st.markdown(f"<div class='answer'>{ans}</div>", unsafe_allow_html=True)
+
     if st.button("🔊 Listen Answer"):
-        speak(st.session_state.last_answer, language)
-    st.markdown("</div>", unsafe_allow_html=True)
+        speak(ans)
+
+st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------- HISTORY ----------------
 st.markdown("<div class='card'>", unsafe_allow_html=True)
 st.subheader("🕘 History")
-for i, h in enumerate(st.session_state.history):
-    st.write(f"{i+1}. {h}")
+for h in st.session_state.history:
+    st.write(h)
 
 if st.button("🗑 Clear History"):
     st.session_state.history = []
-    st.session_state.last_answer = None
+
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------- FOOTER ----------------
